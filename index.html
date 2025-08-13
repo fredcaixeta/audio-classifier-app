@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Isso é IA ou não?</title>
+    <!-- Inclui o Tailwind CSS via CDN para um estilo rápido e simples -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos customizados para a fonte e o fundo */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Cor de fundo escura */
+            color: #e2e8f0; /* Cor de texto clara */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-lg bg-gray-800 p-8 rounded-xl shadow-2xl">
+            <h1 class="text-3xl font-bold text-center text-teal-400 mb-6">
+                Falou mesmo ou é IA?
+            </h1>
+            <p class="text-center text-gray-400 mb-8">
+                Insira a URL de um vídeo do twitter/x com falas para detectar deepfakes políticos ou inserções de narrativas. O app tem foco exclusivo no áudio do vídeo, que será classificado como "Real" ou "IA".
+            </p>
+            
+            <div class="space-y-4">
+                <input
+                    type="text"
+                    id="url-input"
+                    placeholder="Ex: https://twitter.com/user/status/12345"
+                    class="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500 text-white"
+                />
+                <button
+                    id="classify-button"
+                    class="w-full p-3 rounded-lg font-semibold transition-all duration-300 bg-teal-600 hover:bg-teal-700 transform hover:scale-105"
+                >
+                    Analisar Vídeo
+                </button>
+            </div>
+            
+            <div id="loading-spinner" class="hidden mt-8 text-center">
+                <div class="flex items-center justify-center">
+                    <!-- Ícone de spinner SVG -->
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processando...
+                </div>
+            </div>
+
+            <div id="error-message" class="hidden mt-8 p-4 bg-red-800 rounded-lg text-center text-red-200">
+                <!-- Mensagens de erro serão exibidas aqui -->
+            </div>
+
+            <div id="result-display" class="hidden mt-8 p-6 bg-gray-700 rounded-lg text-center">
+                <h2 class="text-xl font-bold mb-2">Resultado da Classificação:</h2>
+                <p class="text-4xl font-extrabold">
+                    <span id="label" class=""></span>
+                </p>
+                <p class="text-lg text-gray-300 mt-2">
+                    Probabilidade de certeza: <span id="probability" class="font-bold"></span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlInput = document.getElementById('url-input');
+            const classifyButton = document.getElementById('classify-button');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const errorDisplay = document.getElementById('error-message');
+            const resultDisplay = document.getElementById('result-display');
+            const labelSpan = document.getElementById('label');
+            const probabilitySpan = document.getElementById('probability');
+
+            // A URL do seu servidor Flask local
+            const BACKEND_URL = 'http://127.0.0.1:5000';
+
+            // Função para esconder todas as mensagens de status
+            const resetUI = () => {
+                loadingSpinner.classList.add('hidden');
+                errorDisplay.classList.add('hidden');
+                resultDisplay.classList.add('hidden');
+            };
+
+            classifyButton.addEventListener('click', async () => {
+                const url = urlInput.value;
+
+                if (!url) {
+                    resetUI();
+                    errorDisplay.classList.remove('hidden');
+                    errorDisplay.textContent = "Por favor, insira uma URL.";
+                    return;
+                }
+
+                resetUI();
+                loadingSpinner.classList.remove('hidden');
+                classifyButton.disabled = true;
+                classifyButton.classList.add('bg-gray-500', 'cursor-not-allowed');
+                classifyButton.classList.remove('bg-teal-600', 'hover:bg-teal-700', 'transform', 'hover:scale-105');
+
+                try {
+                    const response = await fetch(`${BACKEND_URL}/api/classify`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ url: url }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Erro na resposta do servidor. Verifique o URL ou o backend.');
+                    }
+
+                    const data = await response.json();
+                    
+                    resultDisplay.classList.remove('hidden');
+                    labelSpan.textContent = data.label;
+                    probabilitySpan.textContent = `${Math.round(data.probability * 100)}%`;
+
+                    if (data.label === 'IA') {
+                        labelSpan.classList.add('text-red-400');
+                        labelSpan.classList.remove('text-green-400');
+                    } else {
+                        labelSpan.classList.add('text-green-400');
+                        labelSpan.classList.remove('text-red-400');
+                    }
+
+                } catch (err) {
+                    resetUI();
+                    errorDisplay.classList.remove('hidden');
+                    errorDisplay.textContent = `Erro ao fazer a requisição: ${err.message}`;
+                    console.error('Erro ao fazer a requisição:', err);
+                } finally {
+                    loadingSpinner.classList.add('hidden');
+                    classifyButton.disabled = false;
+                    classifyButton.classList.remove('bg-gray-500', 'cursor-not-allowed');
+                    classifyButton.classList.add('bg-teal-600', 'hover:bg-teal-700', 'transform', 'hover:scale-105');
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
